@@ -28,6 +28,23 @@
             padding-bottom: 0;
         }
         
+        /* Banner do Dia do Tetris */
+        .tetris-day-banner {
+            background: linear-gradient(90deg, #ff0000, #ff9900, #ffff00, #00ff00, #00ffff, #0000ff, #9900ff);
+            text-align: center;
+            padding: 10px;
+            font-weight: bold;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            animation: rainbow 3s linear infinite;
+            background-size: 600% 100%;
+        }
+        
+        @keyframes rainbow {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 100% 50%; }
+        }
+        
         .container {
             width: 100%;
             max-width: 500px;
@@ -96,6 +113,7 @@
             grid-template-rows: repeat(20, 1fr);
             grid-template-columns: repeat(10, 1fr);
             overflow: hidden;
+            position: relative;
         }
         
         .side-panel {
@@ -307,6 +325,35 @@
             transform: scale(0.95);
         }
         
+        /* Efeitos de explosão */
+        .explosion-particle {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        .confetti {
+            position: fixed;
+            width: 10px;
+            height: 10px;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        
+        /* Animação de destaque para linha completada */
+        @keyframes line-complete {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        
+        .line-complete {
+            animation: line-complete 0.3s ease-in-out;
+        }
+        
         /* Modo paisagem para iPhone */
         @media (orientation: landscape) {
             body {
@@ -414,6 +461,10 @@
     </style>
 </head>
 <body>
+    <div class="tetris-day-banner" id="tetris-day-banner">
+        FELIZ DIA DO TETRIS! 6 DE JUNHO
+    </div>
+    
     <div class="container">
         <div class="game-header">
             <div class="logo">TETRIS do Arena Geral</div>
@@ -523,6 +574,7 @@
             const finalLinesElement = document.getElementById('final-lines');
             const finalLevelElement = document.getElementById('final-level');
             const restartButton = document.getElementById('restart');
+            const tetrisDayBanner = document.getElementById('tetris-day-banner');
             
             // Elementos de touch
             const touchLeft = document.getElementById('touch-left');
@@ -560,6 +612,14 @@
             let touchStartY = 0;
             let touchEndX = 0;
             let touchEndY = 0;
+            
+            // Verificar se é o Dia do Tetris (6 de junho)
+            const today = new Date();
+            if (today.getDate() === 6 && today.getMonth() === 5) { // 5 é junho (0-indexed)
+                tetrisDayBanner.style.display = 'block';
+            } else {
+                tetrisDayBanner.style.display = 'none';
+            }
             
             // Inicialização do jogo
             init();
@@ -702,6 +762,7 @@
                 cells.forEach(cell => {
                     cell.className = 'cell';
                     cell.style.backgroundColor = '';
+                    cell.classList.remove('line-complete');
                 });
                 
                 // Desenhar as peças fixas
@@ -834,14 +895,27 @@
             
             function clearLines() {
                 let linesCleared = 0;
+                let clearedRows = [];
                 
                 for (let y = ROWS - 1; y >= 0; y--) {
                     if (boardMatrix[y].every(value => value !== 0)) {
+                        // Destacar linha completada
+                        for (let x = 0; x < COLS; x++) {
+                            const cell = board.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
+                            if (cell) {
+                                cell.classList.add('line-complete');
+                            }
+                        }
+                        
+                        // Criar efeito de explosão para esta linha
+                        createLineExplosion(y);
+                        
                         // Remover a linha
                         boardMatrix.splice(y, 1);
                         // Adicionar nova linha no topo
                         boardMatrix.unshift(Array(COLS).fill(0));
                         linesCleared++;
+                        clearedRows.push(y);
                         // Ajustar o índice para verificar a mesma posição novamente
                         y++;
                     }
@@ -860,6 +934,115 @@
                     dropInterval = Math.max(100, 1000 - (level - 1) * 100);
                     
                     updateScore();
+                    
+                    // Criar confetes se for o Dia do Tetris
+                    if (tetrisDayBanner.style.display === 'block') {
+                        createConfetti();
+                    }
+                }
+                
+                return clearedRows;
+            }
+            
+            function createLineExplosion(row) {
+                // Para cada célula na linha, criar partículas de explosão
+                for (let x = 0; x < COLS; x++) {
+                    createExplosionAt(x, row);
+                }
+            }
+            
+            function createExplosionAt(x, y) {
+                const particles = 10;
+                const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
+                
+                for (let i = 0; i < particles; i++) {
+                    const particle = document.createElement('div');
+                    particle.classList.add('explosion-particle');
+                    particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                    
+                    // Posicionar a partícula no centro da célula
+                    const cell = board.querySelector(`.cell[data-row="${y}"][data-col="${x}"]`);
+                    if (cell) {
+                        const rect = cell.getBoundingClientRect();
+                        const boardRect = board.getBoundingClientRect();
+                        
+                        const offsetX = rect.left - boardRect.left + rect.width / 2 - 4;
+                        const offsetY = rect.top - boardRect.top + rect.height / 2 - 4;
+                        
+                        particle.style.left = offsetX + 'px';
+                        particle.style.top = offsetY + 'px';
+                        
+                        board.appendChild(particle);
+                        
+                        // Animação: mover em direção aleatória e desaparecer
+                        const angle = Math.random() * Math.PI * 2;
+                        const speed = 1 + Math.random() * 3;
+                        const vx = Math.cos(angle) * speed;
+                        const vy = Math.sin(angle) * speed;
+                        
+                        let posX = offsetX;
+                        let posY = offsetY;
+                        let opacity = 1;
+                        
+                        const animate = () => {
+                            posX += vx;
+                            posY += vy;
+                            opacity -= 0.02;
+                            
+                            particle.style.left = posX + 'px';
+                            particle.style.top = posY + 'px';
+                            particle.style.opacity = opacity;
+                            
+                            if (opacity > 0) {
+                                requestAnimationFrame(animate);
+                            } else {
+                                particle.remove();
+                            }
+                        };
+                        
+                        requestAnimationFrame(animate);
+                    }
+                }
+            }
+            
+            function createConfetti() {
+                const confettiCount = 30;
+                const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
+                
+                for (let i = 0; i < confettiCount; i++) {
+                    const confetti = document.createElement('div');
+                    confetti.classList.add('confetti');
+                    confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                    confetti.style.width = Math.random() * 10 + 5 + 'px';
+                    confetti.style.height = Math.random() * 10 + 5 + 'px';
+                    confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '0';
+                    
+                    // Posição inicial
+                    const startX = Math.random() * window.innerWidth;
+                    confetti.style.left = startX + 'px';
+                    confetti.style.top = '-10px';
+                    
+                    document.body.appendChild(confetti);
+                    
+                    // Animação
+                    const duration = Math.random() * 3000 + 2000;
+                    const endY = window.innerHeight + 20;
+                    const rotation = Math.random() * 360;
+                    const endX = startX + (Math.random() - 0.5) * 200;
+                    
+                    confetti.animate([
+                        { transform: `translate(0, 0) rotate(0deg)`, opacity: 1 },
+                        { transform: `translate(${endX - startX}px, ${endY}px) rotate(${rotation}deg)`, opacity: 0 }
+                    ], {
+                        duration: duration,
+                        easing: 'cubic-bezier(0,0.9,0.57,1)',
+                        fill: 'forwards'
+                    });
+                    
+                    // Remover após animação
+                    setTimeout(() => {
+                        confetti.remove();
+                    }, duration);
                 }
             }
             
